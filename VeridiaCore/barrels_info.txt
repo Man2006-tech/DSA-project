@@ -1,0 +1,19 @@
+Barrels Implementation Report
+============================
+Total Words: 2715444
+Total Postings: 197599108
+Number of Barrels: 10
+Sharding Strategy: WordID % 10
+Binary Format for Offsets: WordID(4)|BarrelID(4)|Offset(8)|Count(4)
+Generated Files:
+ - barrel_0.bin: 77570668 bytes
+ - barrel_1.bin: 78449364 bytes
+ - barrel_2.bin: 81052088 bytes
+ - barrel_3.bin: 79092652 bytes
+ - barrel_4.bin: 81193440 bytes
+ - barrel_5.bin: 78624680 bytes
+ - barrel_6.bin: 79781732 bytes
+ - barrel_7.bin: 74668480 bytes
+ - barrel_8.bin: 83366272 bytes
+ - barrel_9.bin: 76597056 bytes
+ - word_offsets_barrels.bin: 54308880 bytes
