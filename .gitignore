@@ -13,6 +13,8 @@ VeridiaCore/lexicon.txt
 
 # --- Large File Types ---
 *.bin
+*.json
+*.txt
 *.jsonl
 *.csv
 *.xml
