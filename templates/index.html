@@ -25,28 +25,41 @@
         </header>
 
         <div class="search-container">
-            <div class="search-bar-wrapper">
-                <input type="text" id="search-input" placeholder="Search for articles, topics, or keywords..."
-                    autocomplete="off">
-                <button id="search-btn">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="11" cy="11" r="8"></circle>
-                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                    </svg>
-                </button>
-            </div>
+            <form id="search-form" action="/search" method="get">
+                <div class="search-bar-wrapper">
+                    <input type="text" name="query" id="search-input" placeholder="Search for articles, topics, or keywords..."
+                        autocomplete="off" required>
+                    <button id="search-btn" type="submit">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                    </button>
+                </div>
+            </form>
             <div id="suggestions-box" class="suggestions-box"></div>
         </div>
 
         <div id="results-container" class="results-container">
-            <!-- Results will be injected here -->
             <div class="placeholder-text">
-                Start typing to search...
+                Start typing or click the search icon.
             </div>
-        </div>
+            
+            <div id="loading-indicator" class="loading-indicator" style="display: none;">
+                <div class="spinner"></div>
+                <p>Searching...</p>
+            </div>
+            </div>
     </div>
 
+    <template id="result-template">
+        <div class="result-item">
+            <h3 class="result-title"><a href="#" target="_blank"></a></h3>
+            <p class="result-score"></p>
+            <p class="result-snippet"></p>
+        </div>
+    </template>
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 
