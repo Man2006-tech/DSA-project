@@ -32,21 +32,6 @@ class SearchEngine:
     def load_indices(self):
         print("Loading indices (Barrels Mode)...")
         
-        # Clear existing data to avoid duplication on reload
-        self.lexicon.clear()
-        self.metadata.clear()
-        self.word_offsets.clear()
-        self.trie = Trie()
-        
-        # Close existing barrel file handles
-        for f in self.barrel_files.values():
-            try:
-                f.close()
-            except:
-                pass
-        self.barrel_files.clear()
-        self.barrels.clear()
-        
         # Load Lexicon and Trie
         lex_path = os.path.join(self.data_dir, "lexicon.txt")
         if os.path.exists(lex_path):
@@ -57,13 +42,12 @@ class SearchEngine:
                         word = parts[0]
                         word_id = int(parts[1])
                         self.lexicon[word] = word_id
-                        self.trie.insert(word)
-            print(f"  ✓ Loaded lexicon: {len(self.lexicon):,} words")
+                        self.trie.insert(word) 
         
         # Load Word Offsets (Barrels Version)
         # Format: WordID (4B) | BarrelID (4B) | Offset (8B) | Count (4B) = 20 bytes
         if os.path.exists(self.offsets_file):
-            print(f"  ✓ Loading barrel offsets from {self.offsets_file}...")
+            print(f"Loading barrel offsets from {self.offsets_file}...")
             with open(self.offsets_file, 'rb') as f:
                 while True:
                     data = f.read(20)
@@ -72,7 +56,7 @@ class SearchEngine:
                     word_id, barrel_id, offset, count = struct.unpack('<IIQI', data)
                     self.word_offsets[word_id] = (barrel_id, offset, count)
         else:
-            print(f"  WARNING: {self.offsets_file} not found. Search will fail.")
+            print(f"WARNING: {self.offsets_file} not found. Search will fail.")
 
         # Open Barrels (Lazy or Eager? Let's do Eager mmap for now for speed)
         # Assuming barrels are named barrel_0.bin, barrel_1.bin, etc.
@@ -89,7 +73,7 @@ class SearchEngine:
                     except:
                         pass
             
-            print(f"  ✓ Detected {max_barrel + 1} barrel file(s).")
+            print(f"Detected up to {max_barrel + 1} barrels.")
             
             for i in range(max_barrel + 1):
                 path = os.path.join(self.data_dir, f"barrel_{i}.bin")
@@ -103,7 +87,7 @@ class SearchEngine:
                         else:
                             self.barrels[i] = None
                     except Exception as e:
-                        print(f"  Warning: Error mapping barrel {i}: {e}")
+                        print(f"Error mapping barrel {i}: {e}")
                         self.barrels[i] = None
 
         # Load Metadata
