@@ -80,6 +80,44 @@ function initParticles() {
     });
 }
 
+// AI-Powered Autocomplete System
+class AIAutocomplete {
+    constructor() {
+        this.cache = new Map();
+        this.cacheExpiry = 5 * 60 * 1000; // 5 minutes
+    }
+
+    async fetchAutocomplete(query) {
+        const cacheKey = query.toLowerCase();
+        const cached = this.cache.get(cacheKey);
+        
+        if (cached && Date.now() - cached.time < this.cacheExpiry) {
+            return cached.data;
+        }
+
+        try {
+            const response = await fetch(`/api/autocomplete?q=${encodeURIComponent(query)}`);
+            const data = await response.json();
+            
+            this.cache.set(cacheKey, {
+                data: data,
+                time: Date.now()
+            });
+            
+            return data;
+        } catch (error) {
+            console.error('Autocomplete error:', error);
+            return { suggestions: [], corrections: {}, recommendations: [] };
+        }
+    }
+
+    clearCache() {
+        this.cache.clear();
+    }
+}
+
+const aiAutocomplete = new AIAutocomplete();
+
 // Main Search App
 document.addEventListener('DOMContentLoaded', () => {
     initParticles();
@@ -98,29 +136,31 @@ document.addEventListener('DOMContentLoaded', () => {
             suggestionsBox.classList.remove('active');
             performSearch();
         }
+        // Arrow key navigation
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            const items = suggestionsBox.querySelectorAll('.suggestion-item');
+            if (items.length > 0) {
+                items[0].focus();
+            }
+        }
     });
 
-    // Autocomplete Input Listener
+    // Enhanced Autocomplete Input Listener with AI features
     searchInput.addEventListener('input', debounce(async (e) => {
         const query = e.target.value.trim();
-        if (query.length < 2) {
+        if (query.length < 1) {
             suggestionsBox.classList.remove('active');
             return;
         }
 
         try {
-            const response = await fetch(`/api/suggest?q=${encodeURIComponent(query)}`);
-            const suggestions = await response.json();
-
-            if (suggestions.length > 0) {
-                renderSuggestions(suggestions);
-            } else {
-                suggestionsBox.classList.remove('active');
-            }
+            const autocompleteData = await aiAutocomplete.fetchAutocomplete(query);
+            renderAdvancedSuggestions(autocompleteData, query);
         } catch (error) {
-            console.error('Error fetching suggestions:', error);
+            console.error('Error in autocomplete:', error);
         }
-    }, 300));
+    }, 250));
 
     // Hide suggestions when clicking outside
     document.addEventListener('click', (e) => {
@@ -129,21 +169,96 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    function renderSuggestions(suggestions) {
+    function renderAdvancedSuggestions(data, originalQuery) {
         suggestionsBox.innerHTML = '';
-        suggestions.forEach((word, index) => {
-            const item = document.createElement('div');
-            item.className = 'suggestion-item';
-            item.textContent = word;
-            item.style.animationDelay = `${index * 0.05}s`;
-            item.addEventListener('click', () => {
-                searchInput.value = word;
+
+        const { suggestions, corrections, recommendations } = data;
+
+        // Show correction if available
+        if (corrections && corrections.word) {
+            const correctionDiv = document.createElement('div');
+            correctionDiv.className = 'suggestion-category';
+            correctionDiv.innerHTML = `
+                <div class="category-label">✏️ Did you mean?</div>
+                <div class="correction-item" data-word="${corrections.word}">
+                    <span class="correction-text">${corrections.word}</span>
+                    <span class="correction-icon">💡</span>
+                </div>
+            `;
+            correctionDiv.querySelector('.correction-item').addEventListener('click', () => {
+                searchInput.value = corrections.word;
                 suggestionsBox.classList.remove('active');
                 performSearch();
             });
-            suggestionsBox.appendChild(item);
-        });
-        suggestionsBox.classList.add('active');
+            suggestionsBox.appendChild(correctionDiv);
+        }
+
+        // Show suggestions
+        if (suggestions && suggestions.length > 0) {
+            const suggestionsDiv = document.createElement('div');
+            suggestionsDiv.className = 'suggestion-category';
+            suggestionsDiv.innerHTML = '<div class="category-label">🔍 Suggestions</div>';
+            
+            suggestions.slice(0, 6).forEach((word, index) => {
+                const item = document.createElement('div');
+                item.className = 'suggestion-item';
+                item.innerHTML = `
+                    <span class="suggestion-text">${word}</span>
+                    <span class="suggestion-count">+</span>
+                `;
+                item.style.animationDelay = `${index * 0.04}s`;
+                item.addEventListener('click', () => {
+                    searchInput.value = word;
+                    suggestionsBox.classList.remove('active');
+                    performSearch();
+                });
+                item.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        searchInput.value = word;
+                        suggestionsBox.classList.remove('active');
+                        performSearch();
+                    }
+                });
+                suggestionsDiv.appendChild(item);
+            });
+            suggestionsBox.appendChild(suggestionsDiv);
+        }
+
+        // Show recommendations
+        if (recommendations && recommendations.length > 0) {
+            const recommendDiv = document.createElement('div');
+            recommendDiv.className = 'suggestion-category';
+            recommendDiv.innerHTML = '<div class="category-label">⭐ Related Topics</div>';
+            
+            recommendations.slice(0, 4).forEach((word, index) => {
+                const item = document.createElement('div');
+                item.className = 'recommendation-item';
+                item.innerHTML = `
+                    <span class="tag-icon">🏷️</span>
+                    <span class="tag-text">${word}</span>
+                `;
+                item.style.animationDelay = `${(index + suggestions.length) * 0.04}s`;
+                item.addEventListener('click', () => {
+                    searchInput.value = (originalQuery.split(' ').slice(0, -1).join(' ') + ' ' + word).trim();
+                    suggestionsBox.classList.remove('active');
+                    performSearch();
+                });
+                recommendDiv.appendChild(item);
+            });
+            suggestionsBox.appendChild(recommendDiv);
+        }
+
+        // Show no results message
+        if (!corrections && (!suggestions || suggestions.length === 0) && (!recommendations || recommendations.length === 0)) {
+            const noResultsDiv = document.createElement('div');
+            noResultsDiv.className = 'suggestion-no-results';
+            noResultsDiv.innerHTML = '<span>No suggestions found</span>';
+            suggestionsBox.appendChild(noResultsDiv);
+        }
+
+        if (suggestionsBox.children.length > 0) {
+            suggestionsBox.classList.add('active');
+        }
     }
 
     async function performSearch() {
@@ -162,7 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&semantic=true`);
             const results = await response.json();
 
-            renderResults(results);
+            renderResults(results, query);
         } catch (error) {
             console.error('Error fetching results:', error);
             resultsContainer.innerHTML = `
@@ -175,7 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function renderResults(results) {
+    function renderResults(results, query) {
         resultsContainer.innerHTML = '';
 
         if (results.length === 0) {
@@ -183,11 +298,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="placeholder-content">
                     <div class="placeholder-icon">🔍</div>
                     <div class="placeholder-text">No results found</div>
-                    <p class="placeholder-hint">Try different keywords or search terms</p>
+                    <p class="placeholder-hint">Try different keywords: "${query}"</p>
                 </div>
             `;
             return;
         }
+
+        // Show result count
+        const resultCountDiv = document.createElement('div');
+        resultCountDiv.className = 'result-count-header';
+        resultCountDiv.innerHTML = `📊 Found <strong>${results.length}</strong> results for "<strong>${query}</strong>"`;
+        resultsContainer.appendChild(resultCountDiv);
 
         results.forEach((result, index) => {
             const card = document.createElement('div');
