@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Veridia Search</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <!-- Animated Background -->
+    <div class="background-container">
+        <div class="gradient-bg"></div>
+        <div class="animated-blob blob-1"></div>
+        <div class="animated-blob blob-2"></div>
+        <div class="animated-blob blob-3"></div>
+        <div class="animated-blob blob-4"></div>
+        <canvas id="particle-canvas"></canvas>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-wrapper">
+        <div class="container">
+            <!-- Header -->
+            <header class="header">
+                <div class="logo-wrapper">
+                    <div class="logo-glow"></div>
+                    <h1 class="logo">Veridia</h1>
+                </div>
+                <p class="tagline">Discover the World of Knowledge</p>
+                <p class="subtitle">Powered by advanced search technology</p>
+            </header>
+
+            <!-- Search Section -->
+            <section class="search-section">
+                <div class="search-container">
+                    <form id="search-form" action="/search" method="get">
+                        <div class="search-input-group">
+                            <div class="search-bar-wrapper">
+                                <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="11" cy="11" r="8"></circle>
+                                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                </svg>
+                                <input type="text" name="query" id="search-input" placeholder="Search articles, topics, or keywords..."
+                                    autocomplete="off" required spellcheck="false">
+                                <button id="search-btn" type="submit" class="search-button">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                                        <polyline points="12 5 19 12 12 19"></polyline>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div id="suggestions-box" class="suggestions-box"></div>
+                        </div>
+                    </form>
+                </div>
+                <div class="search-stats">
+                    <span class="stat-item">🔍 Instant Search</span>
+                    <span class="stat-item">⚡ Real-time Results</span>
+                    <span class="stat-item">🎯 Accurate Matching</span>
+                </div>
+            </section>
+
+            <!-- Results Container -->
+            <div id="results-container" class="results-container">
+                <div class="placeholder-content">
+                    <div class="placeholder-icon">🔎</div>
+                    <div class="placeholder-text">Start typing to search</div>
+                    <p class="placeholder-hint">Enter keywords to discover information</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <template id="result-template">
+        <div class="result-item">
+            <h3 class="result-title"><a href="#" target="_blank"></a></h3>
+            <p class="result-score"></p>
+            <p class="result-snippet"></p>
+        </div>
+    </template>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+
+</html>
