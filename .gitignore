@@ -27,6 +27,9 @@ VeridiaCore/Unconfirmed*.crdownload
 *.db
 *.sqlite3
 *.crdownload
+*.npy
+debug_*.txt
+server_log.txt
 
 # --- OS generated files ---
 .DS_Store

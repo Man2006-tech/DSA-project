@@ -57,32 +57,67 @@ class SearchEngine:
         self.id_to_word = {}
         
         # 1. Load Lexicon
-        lex_path = os.path.join(self.data_dir, "lexicon.txt")
-        if os.path.exists(lex_path):
-            print("  Loading lexicon...")
-            with open(lex_path, 'r', encoding='utf-8') as f:
-                for line in f:
-                    parts = line.strip().split('\t')
-                    if len(parts) == 2:
-                        word = parts[0]
-                        word_id = int(parts[1])
-                        self.lexicon[word] = word_id
-                        self.id_to_word[word_id] = word
-            
-            # Prepare for Autocomplete
-            print(f"  [OK] Lexicon loaded ({len(self.lexicon):,} words). Sorting for autocomplete...")
-            t_start = time.time()
-            self.sorted_lexicon = sorted(self.lexicon.keys())
-            print(f"  [OK] Sorted in {time.time()-t_start:.2f}s")
-            
-        else:
-             print(f"  [ERR] Lexicon not found at {lex_path}")
+        lex_cache_path = os.path.join(self.data_dir, "lexicon_cache.pkl")
+        loaded_from_cache = False
+        
+        try:
+            if os.path.exists(lex_cache_path):
+                print("  Loading lexicon from cache (fast)...")
+                import pickle
+                with open(lex_cache_path, 'rb') as f:
+                    cache_data = pickle.load(f)
+                    self.lexicon = cache_data['lexicon']
+                    self.sorted_lexicon = cache_data['sorted_lexicon']
+                    # self.id_to_word could be rebuilt or cached. Rebuilding is fast enough or cache it too.
+                    self.id_to_word = {v: k for k, v in self.lexicon.items()} 
+                print(f"  [OK] Lexicon cache loaded ({len(self.lexicon):,} words).")
+                loaded_from_cache = True
+        except Exception as e:
+            print(f"  [WARN] Failed to load lexicon cache: {e}")
+
+        if not loaded_from_cache:
+            lex_path = os.path.join(self.data_dir, "lexicon.txt")
+            if os.path.exists(lex_path):
+                print("  Loading lexicon from text...")
+                with open(lex_path, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        parts = line.strip().split('\t')
+                        if len(parts) == 2:
+                            word = parts[0]
+                            word_id = int(parts[1])
+                            self.lexicon[word] = word_id
+                            self.id_to_word[word_id] = word
+                
+                # Prepare for Autocomplete
+                print(f"  [OK] Lexicon loaded ({len(self.lexicon):,} words). Sorting for autocomplete...")
+                t_start = time.time()
+                self.sorted_lexicon = sorted(self.lexicon.keys())
+                print(f"  [OK] Sorted in {time.time()-t_start:.2f}s")
+                
+                # Save cache
+                try:
+                    print("  Saving lexicon cache...")
+                    import pickle
+                    with open(lex_cache_path, 'wb') as f:
+                        pickle.dump({
+                            'lexicon': self.lexicon,
+                            'sorted_lexicon': self.sorted_lexicon
+                        }, f)
+                    print("  [OK] Lexicon cache saved.")
+                except Exception as e:
+                    print(f"  [WARN] Failed to save cache: {e}")
+                
+            else:
+                 print(f"  [ERR] Lexicon not found at {lex_path}")
         
         # 2. Load Offsets (Dense Mmap)
         if os.path.exists(self.offsets_dense_path):
-            self.offsets_file_handle = open(self.offsets_dense_path, 'r+b')
-            self.offsets_mmap = mmap.mmap(self.offsets_file_handle.fileno(), 0, access=mmap.ACCESS_READ)
-            print(f"  [OK] Mapped offsets ({len(self.offsets_mmap)//16:,} records)")
+            try:
+                self.offsets_file_handle = open(self.offsets_dense_path, 'rb')
+                self.offsets_mmap = mmap.mmap(self.offsets_file_handle.fileno(), 0, access=mmap.ACCESS_READ)
+                print(f"  [OK] Mapped offsets ({len(self.offsets_mmap)//16:,} records)")
+            except Exception as e:
+                print(f"  [ERR] Failed to map offsets: {e}")
         else:
             print(f"  [WARN] {self.offsets_dense_path} missing!")
 
@@ -113,7 +148,10 @@ class SearchEngine:
                     parts = line.strip().split('|')
                     if len(parts) >= 3:
                         doc_id = int(parts[0])
-                        self.metadata[doc_id] = {"title": parts[1], "filename": parts[2]}
+                        raw_title = parts[1]
+                        # Fix display issue: Truncate very long titles (likely parse errors)
+                        title = raw_title[:150] + "..." if len(raw_title) > 150 else raw_title
+                        self.metadata[doc_id] = {"title": title, "filename": parts[2]}
                         
         # 5. Persistent Dataset Access
         jsonl_path = os.path.join(self.data_dir, "dataset.jsonl")

@@ -59,7 +59,7 @@ class IncrementalIndexer:
                         word_id = int(parts[1])
                         self.lexicon[word] = word_id
                         self.word_id_counter = max(self.word_id_counter, word_id + 1)
-            print(f"  ✓ Loaded lexicon: {len(self.lexicon):,} words")
+            print(f"  [OK] Loaded lexicon: {len(self.lexicon):,} words")
         
         # Load next document ID from state file
         if os.path.exists(self.state_file):
@@ -82,7 +82,7 @@ class IncrementalIndexer:
                             except:
                                 pass
                 self.next_doc_id = max_doc_id + 1
-                print(f"  ✓ Inferred next_doc_id from metadata: {self.next_doc_id}")
+                print(f"  [OK] Inferred next_doc_id from metadata: {self.next_doc_id}")
     
     def _save_state(self):
         """Save current indexing state to file"""
