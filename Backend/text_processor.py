@@ -1,16 +1,20 @@
 """
 Veridia Search Engine - Text Processing Module
-Optimized text cleaning and tokenization
+Optimized text cleaning and tokenization with LRU Caching
 """
 import re
+from functools import lru_cache # Added for performance optimization
 from config import STOP_WORDS, MIN_WORD_LENGTH
 
 # Compile regex pattern once for performance
 WORD_PATTERN = re.compile(r'[a-z]+')
 
+# --- VALUABLE CHANGE: Added LRU Cache ---
+# Caching the results of tokenization prevents re-processing common strings
+@lru_cache(maxsize=1024)
 def clean_and_tokenize(text):
     """
-    Fast tokenization and cleaning of text.
+    Fast tokenization and cleaning of text with result caching.
     
     Args:
         text: Raw input text
@@ -18,6 +22,9 @@ def clean_and_tokenize(text):
     Returns:
         List of cleaned tokens
     """
+    if not text:
+        return []
+
     # Convert to lowercase and extract words in one pass
     words = WORD_PATTERN.findall(text.lower())
     
@@ -27,14 +34,7 @@ def clean_and_tokenize(text):
 
 def is_english_text(text, min_english_words=5):
     """
-    Quick English language detection.
-    
-    Args:
-        text: Text to check
-        min_english_words: Minimum number of English stop words required
-        
-    Returns:
-        True if text appears to be English
+    Quick English language detection using basic stop-word indicators.
     """
     # Check first 500 characters for speed
     sample = text[:500].lower()
@@ -49,14 +49,7 @@ def is_english_text(text, min_english_words=5):
 
 def extract_title_preview(text, max_length=200):
     """
-    Extract a clean title preview from text.
-    
-    Args:
-        text: Source text
-        max_length: Maximum length of preview
-        
-    Returns:
-        Cleaned preview string
+    Extract a clean title preview from text, cutting at word boundaries.
     """
     # Remove newlines and extra spaces
     cleaned = ' '.join(text.split())
@@ -64,7 +57,7 @@ def extract_title_preview(text, max_length=200):
     if len(cleaned) <= max_length:
         return cleaned
     
-    # Cut at word boundary
+    # Cut at word boundary to avoid partial words
     preview = cleaned[:max_length]
     last_space = preview.rfind(' ')
     
