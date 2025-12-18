@@ -23,38 +23,62 @@
     </div>
 
     <div class="container">
-        <header>
-            <h1 class="logo">Veridia</h1>
-            <p class="tagline">Discover the World of Knowledge</p>
+        <header class="main-header">
+            <div class="header-content">
+                <h1 class="logo">Veridia</h1>
+                <p class="tagline">Discover the World of Knowledge</p>
+                <p class="subtitle">Fast • Intelligent • Comprehensive Search Engine</p>
+            </div>
         </header>
 
         <div class="search-container">
             <form id="search-form" action="/search" method="get">
                 <div class="search-bar-wrapper">
+                    <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
                     <input type="text" name="query" id="search-input" placeholder="Search for articles, topics, or keywords..."
                         autocomplete="off" required>
-                    <button id="search-btn" type="submit">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="11" cy="11" r="8"></circle>
-                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    <button id="search-btn" type="submit" title="Search">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="9 18 15 12 9 6"></polyline>
                         </svg>
                     </button>
                 </div>
             </form>
             <div id="suggestions-box" class="suggestions-box"></div>
+            <div class="search-hints">
+                <p class="hint-text">💡 Try: machine learning, quantum physics, data science</p>
+            </div>
         </div>
 
         <div id="results-container" class="results-container">
-            <div class="placeholder-text">
-                Start typing or click the search icon.
+            <div class="placeholder-content">
+                <div class="placeholder-icon">🔍</div>
+                <h2 class="placeholder-title">Ready to explore?</h2>
+                <p class="placeholder-text">
+                    Start typing to search through articles, topics, and keywords
+                </p>
+                <div class="quick-tags">
+                    <span class="tag">Artificial Intelligence</span>
+                    <span class="tag">Technology</span>
+                    <span class="tag">Science</span>
+                    <span class="tag">Innovation</span>
+                </div>
             </div>
             
             <div id="loading-indicator" class="loading-indicator" style="display: none;">
                 <div class="spinner"></div>
                 <p>Searching...</p>
             </div>
-            </div>
+        </div>
+
+        <footer class="main-footer">
+            <p>© 2025 Veridia • Advanced Knowledge Search Engine</p>
+        </footer>
     </div>
 
     <template id="result-template">
