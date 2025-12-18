@@ -5,7 +5,7 @@ import re
 import time
 
 # Add the parent directory to path to import engine
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+# sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from VeridiaCore.engine import SearchEngine
 from incremental_indexer import IncrementalIndexer
@@ -16,14 +16,15 @@ from ai_suggestion_engine import (
 
 # Correctly locate templates and static folders given the directory structure
 # Backend/app.py -> templates are in ../templates, static is in ../static
-template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'templates'))
-static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'static'))
+# Correctly locate templates and static folders given the directory structure
+template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'templates'))
+static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'static'))
 
 app = Flask(__name__, template_folder=template_dir, static_folder=static_dir)
 
 # Initialize Search Engine
-# Data is in Veridia_Core/VeridiaCore (where barrels are)
-DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'VeridiaCore'))
+# Data is in VeridiaCore (where barrels are)
+DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), 'VeridiaCore'))
 search_engine = SearchEngine(DATA_DIR)
 
 # Initialize Incremental Indexer

@@ -4,40 +4,78 @@ import re
 import struct
 import mmap
 import time
-import bisect
+import sqlite3
 from .vector_model import VectorModel
-# Trie removed
 
 class SearchEngine:
     def __init__(self, data_dir):
         self.data_dir = data_dir
-        self.lexicon = {}
-        self.sorted_lexicon = [] # For bisect suggestions
         self.metadata = {}
-        self.word_offsets = {} 
+        self.word_offsets = {}
         self.barrels = {}
-        self.barrel_files = {} 
+        self.barrel_files = {}
         
-        # Persistent Handles for Enrichment
         self.dataset_file = None
         self.dataset_mmap = None
         self.doc_offsets_file = None
         self.doc_offsets_mmap = None
         
-        # Components
         self.vector_model = VectorModel(os.path.join(self.data_dir, "glove.txt"))
         
-        self.offsets_file = os.path.join(self.data_dir, "word_offsets_barrels.bin")
         self.offsets_dense_path = os.path.join(self.data_dir, "word_offsets_dense.bin")
         self.offsets_mmap = None
         self.offsets_file_handle = None
 
+        # Connect to SQLite Lexicon (Memory Efficient)
+        self.db_path = os.path.join(self.data_dir, "lexicon.db")
+        self.conn = None
+        if os.path.exists(self.db_path):
+            try:
+                self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+                self.conn.row_factory = sqlite3.Row
+                print(f"  [OK] Connected to SQLite lexicon at {self.db_path}")
+            except Exception as e:
+                print(f"  [ERR] Failed to connect to DB: {e}")
+        else:
+            print(f"  [ERR] Lexicon DB not found at {self.db_path}. Please run build_sqlite.py")
+
         self.load_indices()
         self.vector_model.load_model()
+        
+        # --- DYNAMIC MEMORY INDEX (For Instant Demo Uploads) ---
+        self.dynamic_index = {} # word -> set(doc_id)
+        self.dynamic_metadata = {} # doc_id -> {title, filename, text, authors}
+        self.dynamic_doc_id_counter = 10000000 # Start high to avoid collision
+
+    def add_document_dynamic(self, title, text, filename):
+        """Add a document instantly to memory-only index"""
+        doc_id = self.dynamic_doc_id_counter
+        self.dynamic_doc_id_counter += 1
+        
+        # storage
+        self.dynamic_metadata[doc_id] = {
+            "title": title,
+            "filename": filename,
+            "text": text,
+            "authors": "Uploaded User",
+            "abstract": text[:300] + "..."
+        }
+        self.metadata[doc_id] = {"title": title, "filename": filename} # consistency
+        
+        # index
+        words = re.findall(r'[a-z0-9]+', text.lower())
+        for word in words:
+            if len(word) < 2: continue
+            if word not in self.dynamic_index:
+                self.dynamic_index[word] = set()
+            self.dynamic_index[word].add(doc_id)
+            
+        print(f"  [DYNAMIC] Added '{filename}' (ID: {doc_id}) to memory index.")
+        return doc_id
 
     def __del__(self):
-        # Cleanup handles
         try:
+            if self.conn: self.conn.close()
             if self.dataset_mmap: self.dataset_mmap.close()
             if self.dataset_file: self.dataset_file.close()
             if self.doc_offsets_mmap: self.doc_offsets_mmap.close()
@@ -49,68 +87,20 @@ class SearchEngine:
                 except: pass
         except: pass
 
-    def load_indices(self):
-        print("Loading indices (Optimized Bisect)...")
-        
-        self.lexicon.clear()
-        self.sorted_lexicon = []
-        self.id_to_word = {}
-        
-        # 1. Load Lexicon
-        lex_cache_path = os.path.join(self.data_dir, "lexicon_cache.pkl")
-        loaded_from_cache = False
-        
+    def get_word_id(self, word):
+        """Get ID for a word from SQLite"""
+        if not self.conn: return None
         try:
-            if os.path.exists(lex_cache_path):
-                print("  Loading lexicon from cache (fast)...")
-                import pickle
-                with open(lex_cache_path, 'rb') as f:
-                    cache_data = pickle.load(f)
-                    self.lexicon = cache_data['lexicon']
-                    self.sorted_lexicon = cache_data['sorted_lexicon']
-                    # self.id_to_word could be rebuilt or cached. Rebuilding is fast enough or cache it too.
-                    self.id_to_word = {v: k for k, v in self.lexicon.items()} 
-                print(f"  [OK] Lexicon cache loaded ({len(self.lexicon):,} words).")
-                loaded_from_cache = True
-        except Exception as e:
-            print(f"  [WARN] Failed to load lexicon cache: {e}")
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT id FROM lexicon WHERE word = ?", (word,))
+            row = cursor.fetchone()
+            return row['id'] if row else None
+        except: return None
 
-        if not loaded_from_cache:
-            lex_path = os.path.join(self.data_dir, "lexicon.txt")
-            if os.path.exists(lex_path):
-                print("  Loading lexicon from text...")
-                with open(lex_path, 'r', encoding='utf-8') as f:
-                    for line in f:
-                        parts = line.strip().split('\t')
-                        if len(parts) == 2:
-                            word = parts[0]
-                            word_id = int(parts[1])
-                            self.lexicon[word] = word_id
-                            self.id_to_word[word_id] = word
-                
-                # Prepare for Autocomplete
-                print(f"  [OK] Lexicon loaded ({len(self.lexicon):,} words). Sorting for autocomplete...")
-                t_start = time.time()
-                self.sorted_lexicon = sorted(self.lexicon.keys())
-                print(f"  [OK] Sorted in {time.time()-t_start:.2f}s")
-                
-                # Save cache
-                try:
-                    print("  Saving lexicon cache...")
-                    import pickle
-                    with open(lex_cache_path, 'wb') as f:
-                        pickle.dump({
-                            'lexicon': self.lexicon,
-                            'sorted_lexicon': self.sorted_lexicon
-                        }, f)
-                    print("  [OK] Lexicon cache saved.")
-                except Exception as e:
-                    print(f"  [WARN] Failed to save cache: {e}")
-                
-            else:
-                 print(f"  [ERR] Lexicon not found at {lex_path}")
+    def load_indices(self):
+        print("Loading indices...")
         
-        # 2. Load Offsets (Dense Mmap)
+        # Load Offsets (Dense Mmap)
         if os.path.exists(self.offsets_dense_path):
             try:
                 self.offsets_file_handle = open(self.offsets_dense_path, 'rb')
@@ -118,10 +108,8 @@ class SearchEngine:
                 print(f"  [OK] Mapped offsets ({len(self.offsets_mmap)//16:,} records)")
             except Exception as e:
                 print(f"  [ERR] Failed to map offsets: {e}")
-        else:
-            print(f"  [WARN] {self.offsets_dense_path} missing!")
 
-        # 3. Barrels (Mmap)
+        # Load Barrels
         max_barrel = 0
         for filename in os.listdir(self.data_dir):
             if filename.startswith("barrel_") and filename.endswith(".bin"):
@@ -140,86 +128,79 @@ class SearchEngine:
             else:
                 self.barrels[i] = None
 
-        # 4. Metadata
+        # Load Metadata
         meta_path = os.path.join(self.data_dir, "document_metadata.txt")
         if os.path.exists(meta_path):
-            with open(meta_path, 'r', encoding='utf-8') as f:
-                for line in f:
-                    parts = line.strip().split('|')
-                    if len(parts) >= 3:
-                        doc_id = int(parts[0])
-                        raw_title = parts[1]
-                        # Fix display issue: Truncate very long titles (likely parse errors)
-                        title = raw_title[:150] + "..." if len(raw_title) > 150 else raw_title
-                        self.metadata[doc_id] = {"title": title, "filename": parts[2]}
-                        
-        # 5. Persistent Dataset Access
+            try:
+                with open(meta_path, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        parts = line.strip().split('||')
+                        if len(parts) >= 2:
+                            doc_id = int(parts[0])
+                            title = parts[1][:200] if len(parts[1]) > 200 else parts[1]
+                            filename = parts[2] if len(parts) > 2 else "unknown.txt"
+                            self.metadata[doc_id] = {"title": title, "filename": filename}
+                print(f"  [OK] Loaded {len(self.metadata):,} documents metadata")
+            except Exception as e:
+                print(f"  [ERR] Metadata load failed: {e}")
+        
+        # Load Dataset for content retrieval
         jsonl_path = os.path.join(self.data_dir, "dataset.jsonl")
         offsets_path = os.path.join(self.data_dir, "doc_offsets.bin")
         
         if os.path.exists(jsonl_path) and os.path.exists(offsets_path):
             try:
-                self.dataset_file = open(jsonl_path, 'rb') 
+                self.dataset_file = open(jsonl_path, 'rb')
                 if os.path.getsize(jsonl_path) > 0:
                     self.dataset_mmap = mmap.mmap(self.dataset_file.fileno(), 0, access=mmap.ACCESS_READ)
                 
                 self.doc_offsets_file = open(offsets_path, 'rb')
                 if os.path.getsize(offsets_path) > 0:
                     self.doc_offsets_mmap = mmap.mmap(self.doc_offsets_file.fileno(), 0, access=mmap.ACCESS_READ)
-                print("  [OK] Dataset & Doc Offsets mapped.")
+                print("  [OK] Dataset mapped for content retrieval")
             except Exception as e:
-                print(f"  [ERR] Failed to map dataset: {e}")
-        else:
-            print("  [WARN] Dataset components missing.")
-            
-        print("READY.")
+                print(f"  [WARN] Dataset mapping failed: {e}")
+        
+        print("[OK] READY")
 
     def get_word_info(self, word_id):
+        """Get barrel info for a word ID"""
         if not self.offsets_mmap: return None
         start = word_id * 16
         if start + 16 > len(self.offsets_mmap): return None
         return struct.unpack_from('<IQI', self.offsets_mmap, start)
 
     def get_suggestions(self, prefix):
-        if not prefix: return []
-        prefix = prefix.lower()
-        
-        # Binary search for start
-        idx = bisect.bisect_left(self.sorted_lexicon, prefix)
-        
-        suggestions = []
-        # Collect matches
-        for j in range(idx, len(self.sorted_lexicon)):
-            word = self.sorted_lexicon[j]
-            if not word.startswith(prefix):
-                break
-            suggestions.append(word)
-            if len(suggestions) >= 8: # Limit
-                break
-                
-        # Optional: Sort shorter words first? 
-        # They are already sorted alphabetically. 'apple' comes before 'apples'. Good.
-        return suggestions
+        """Get autocomplete suggestions from SQLite"""
+        if not prefix or not self.conn: return []
+        try:
+            cursor = self.conn.cursor()
+            query = prefix.lower()
+            # Optimization: Use >= and < for range scan if index exists, but LIKE is easier
+            # Lexicon is indexed on 'word'. LIKE 'prefix%' uses index in SQLite!
+            cursor.execute("SELECT word FROM lexicon WHERE word LIKE ? ORDER BY word LIMIT 10", (query + '%',))
+            return [row['word'] for row in cursor.fetchall()]
+        except Exception as e:
+            print(f"Autocomplete error: {e}")
+            return []
 
     def search(self, query, use_semantic=True):
         STOP_WORDS = {
             "a", "an", "the", "and", "or", "but", "if", "of", "at", "by", "for", "with",
-            "about", "against", "between", "into", "through", "during", "before", "after",
-            "above", "below", "to", "from", "up", "down", "in", "out", "on", "off", "over",
-            "under", "again", "further", "then", "once", "here", "there", "when", "where",
-            "why", "how", "all", "any", "both", "each", "few", "more", "most", "other",
-            "some", "such", "no", "nor", "not", "only", "own", "same", "so", "than", "too",
-            "very", "can", "will", "just", "don", "should", "now", "are", "is", "was", "were",
-            "this", "that", "these", "those", "have", "has", "had", "which", "it", "its"
+            "about", "in", "on", "is", "it", "to"
         }
         
-        all_words = re.findall(r'[a-z]+', query.lower())
+        # Allow both letters and numbers
+        all_words = re.findall(r'[a-z0-9]+', query.lower())
         if not all_words: return []
         
+        # Relaxed filtering
         keywords = [w for w in all_words if w not in STOP_WORDS]
+        keywords = [w for w in keywords if len(w) >= 2 or w.isdigit()]
+        
         if not keywords: keywords = all_words
         
-        concept_doc_sets = []
+        print(f"  Searching for keywords: {keywords}")
         doc_scores = {}
         
         for word in keywords:
@@ -228,79 +209,76 @@ class SearchEngine:
                 synonyms = self.vector_model.find_similar_words(word, top_n=2)
                 terms.update(synonyms)
             
-            current_concept_docs = set()
-            
             for term in terms:
-                if term in self.lexicon:
-                    word_id = self.lexicon[term]
+                # 1. Search Main Disk Index
+                word_id = self.get_word_id(term)
+                if word_id is not None:
                     info = self.get_word_info(word_id)
                     if info:
                         barrel_id, offset, count = info
                         if barrel_id in self.barrels and self.barrels[barrel_id]:
-                             mm = self.barrels[barrel_id]
-                             if offset + count * 4 <= len(mm):
-                                 doc_ids = struct.unpack_from(f'<{count}I', mm, offset)
-                                 current_concept_docs.update(doc_ids)
-                                 
-                                 weight = 1.0 if term == word else 0.7
-                                 for doc_id in doc_ids:
-                                     doc_scores[doc_id] = doc_scores.get(doc_id, 0) + weight
+                            mm = self.barrels[barrel_id]
+                            if offset + count * 4 <= len(mm):
+                                doc_ids = struct.unpack_from(f'<{count}I', mm, offset)
+                                weight = 1.0 if term == word else 0.5
+                                for doc_id in doc_ids:
+                                    if doc_id not in doc_scores:
+                                        doc_scores[doc_id] = 0
+                                    doc_scores[doc_id] += weight
+                
+                # 2. Search Dynamic Memory Index
+                if term in self.dynamic_index:
+                    for doc_id in self.dynamic_index[term]:
+                        weight = 1.0 if term == word else 0.5
+                        if doc_id not in doc_scores: doc_scores[doc_id] = 0
+                        doc_scores[doc_id] += weight * 2.0 # Boost fresh content
 
-            if current_concept_docs:
-                concept_doc_sets.append(current_concept_docs)
-        
-        final_doc_ids = set()
-        results_mode = "STRICT"
-        
-        if len(concept_doc_sets) == len(keywords):
-            try:
-                final_doc_ids = set.intersection(*concept_doc_sets)
-            except: pass
-            
-        if len(final_doc_ids) < 5:
-            results_mode = "FALLBACK"
-            sorted_docs = sorted(doc_scores.items(), key=lambda x: x[1], reverse=True)
-            final_doc_ids = [did for did, score in sorted_docs[:100]]
-            
-        final_results = []
-        for doc_id in final_doc_ids:
-             score = doc_scores.get(doc_id, 0)
-             if results_mode == "STRICT": score *= 2.0
-             final_results.append((doc_id, score))
-             
-        final_results.sort(key=lambda x: x[1], reverse=True)
-        
-        output = []
-        for doc_id, score in final_results[:50]:
+        sorted_docs = sorted(doc_scores.items(), key=lambda x: x[1], reverse=True)
+        results = []
+        for doc_id, score in sorted_docs[:50]:
             if doc_id in self.metadata:
-                output.append({
+                results.append({
                     "doc_id": doc_id,
                     "title": self.metadata[doc_id]["title"],
                     "filename": self.metadata[doc_id]["filename"],
                     "score": round(score, 2)
                 })
-        return output
+        
+        print(f"  Found {len(results)} results")
+        return results
 
     def get_document_content(self, doc_id):
-        if doc_id not in self.metadata: return None
-        if not self.dataset_mmap or not self.doc_offsets_mmap: return None
+        # 1. Check Dynamic Index First
+        if hasattr(self, 'dynamic_metadata') and doc_id in self.dynamic_metadata:
+             return self.dynamic_metadata[doc_id]
+
+        # 2. Check Disk Index
+        if doc_id not in self.metadata: 
+            return None
+        if not self.dataset_mmap or not self.doc_offsets_mmap: 
+            return None
         
         try:
             off_pos = (doc_id - 1) * 8
-            if off_pos + 8 > len(self.doc_offsets_mmap): return None
+            if off_pos + 8 > len(self.doc_offsets_mmap): 
+                return None
             
             byte_offset = struct.unpack_from('Q', self.doc_offsets_mmap, off_pos)[0]
-            
             end_pos = self.dataset_mmap.find(b'\n', byte_offset)
-            if end_pos == -1: end_pos = len(self.dataset_mmap)
+            if end_pos == -1: 
+                end_pos = len(self.dataset_mmap)
             
             line_bytes = self.dataset_mmap[byte_offset:end_pos]
-            line = line_bytes.decode('utf-8')
+            line = line_bytes.decode('utf-8', errors='ignore')
             
             data = json.loads(line)
-            title = data.get('title', 'No Title').replace('\n', ' ')
-            abstract = data.get('abstract', '').replace('\n', ' ')
-            return {"title": title, "abstract": abstract, "full": line}
-            
+            return {
+                "title": data.get('title', 'No Title'),
+                "abstract": data.get('abstract', '')[:500],
+                "text": data.get('text', data.get('abstract', 'No content available')), 
+                "authors": data.get('authors', 'Unknown'),
+                "filename": self.metadata[doc_id]["filename"]
+            }
         except Exception as e:
+            print(f"  [ERROR] Content retrieval failed for doc {doc_id}: {e}")
             return None

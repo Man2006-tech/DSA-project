@@ -10,14 +10,14 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Data directory containing raw text/JSON files
 # Point to the DATA directory (Directly in Search-Engine root)
-DATA_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "DATA"))
+DATA_DIR = os.path.abspath(os.path.join(BASE_DIR, "DATA"))
 
 # JSON dataset path
 JSON_DATASET_PATH = os.path.join(os.path.dirname(DATA_DIR), "VeridiaCore", "dataset.jsonl")
 
 # Output directory for indices (Where barrels and lexicon are)
 # Point to VeridiaCore (Directly in Search-Engine root)
-OUTPUT_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "VeridiaCore"))
+OUTPUT_DIR = os.path.abspath(os.path.join(BASE_DIR, "VeridiaCore"))
 
 # Index file paths
 LEXICON_PATH = os.path.join(OUTPUT_DIR, "lexicon.txt")

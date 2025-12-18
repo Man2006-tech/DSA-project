@@ -1,331 +1,227 @@
-// Initialize particles
-function initParticles() {
-    const canvas = document.getElementById('particle-canvas');
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-
-    const particles = [];
-    const particleCount = 50;
-
-    class Particle {
-        constructor() {
-            this.x = Math.random() * canvas.width;
-            this.y = Math.random() * canvas.height;
-            this.size = Math.random() * 2 + 0.5;
-            this.speedX = (Math.random() - 0.5) * 0.5;
-            this.speedY = (Math.random() - 0.5) * 0.5;
-            this.opacity = Math.random() * 0.5 + 0.2;
-        }
-
-        update() {
-            this.x += this.speedX;
-            this.y += this.speedY;
-
-            if (this.x > canvas.width) this.x = 0;
-            if (this.x < 0) this.x = canvas.width;
-            if (this.y > canvas.height) this.y = 0;
-            if (this.y < 0) this.y = canvas.height;
-        }
-
-        draw() {
-            ctx.fillStyle = `rgba(0, 212, 255, ${this.opacity})`;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-            ctx.fill();
-        }
-    }
-
-    for (let i = 0; i < particleCount; i++) {
-        particles.push(new Particle());
-    }
-
-    function animate() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        particles.forEach((particle, index) => {
-            particle.update();
-            particle.draw();
-
-            // Draw connections
-            particles.forEach((other, otherIndex) => {
-                if (index < otherIndex) {
-                    const dx = particle.x - other.x;
-                    const dy = particle.y - other.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-
-                    if (distance < 150) {
-                        ctx.strokeStyle = `rgba(0, 212, 255, ${0.1 * (1 - distance / 150)})`;
-                        ctx.lineWidth = 0.5;
-                        ctx.beginPath();
-                        ctx.moveTo(particle.x, particle.y);
-                        ctx.lineTo(other.x, other.y);
-                        ctx.stroke();
-                    }
-                }
-            });
-        });
-
-        requestAnimationFrame(animate);
-    }
-
-    animate();
-
-    // Resize canvas on window resize
-    window.addEventListener('resize', () => {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-    });
-}
-
-// AI-Powered Autocomplete System
-class AIAutocomplete {
-    constructor() {
-        this.cache = new Map();
-        this.cacheExpiry = 5 * 60 * 1000; // 5 minutes
-    }
-
-    async fetchAutocomplete(query) {
-        const cacheKey = query.toLowerCase();
-        const cached = this.cache.get(cacheKey);
-        
-        if (cached && Date.now() - cached.time < this.cacheExpiry) {
-            return cached.data;
-        }
-
-        try {
-            const response = await fetch(`/api/autocomplete?q=${encodeURIComponent(query)}`);
-            const data = await response.json();
-            
-            this.cache.set(cacheKey, {
-                data: data,
-                time: Date.now()
-            });
-            
-            return data;
-        } catch (error) {
-            console.error('Autocomplete error:', error);
-            return { suggestions: [], corrections: {}, recommendations: [] };
-        }
-    }
-
-    clearCache() {
-        this.cache.clear();
-    }
-}
-
-const aiAutocomplete = new AIAutocomplete();
-
-// Main Search App
 document.addEventListener('DOMContentLoaded', () => {
-    initParticles();
-
+    // DOM Elements
+    const searchForm = document.getElementById('search-form');
     const searchInput = document.getElementById('search-input');
-    const searchBtn = document.getElementById('search-btn');
     const resultsContainer = document.getElementById('results-container');
+    const loadingIndicator = document.getElementById('loading-indicator');
+    const resultTemplate = document.getElementById('result-template');
     const suggestionsBox = document.getElementById('suggestions-box');
 
-    // Event Listeners
-    searchBtn.addEventListener('click', performSearch);
+    // Animation Canvas
+    initParticleCanvas();
 
-    // Keypress for Search (Enter)
-    searchInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            suggestionsBox.classList.remove('active');
-            performSearch();
-        }
-        // Arrow key navigation
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            const items = suggestionsBox.querySelectorAll('.suggestion-item');
-            if (items.length > 0) {
-                items[0].focus();
+    // State
+    let currentQuery = '';
+    let debounceTimer;
+
+    // --- FILE UPLOAD LOGIC (SAFE ADDITION) ---
+    const uploadBtn = document.getElementById('upload-trigger-btn');
+    const fileInput = document.getElementById('file-upload-input');
+    const uploadStatus = document.getElementById('upload-status');
+
+    if (uploadBtn && fileInput) {
+        uploadBtn.addEventListener('click', () => fileInput.click());
+
+        fileInput.addEventListener('change', async () => {
+            if (fileInput.files.length > 0) {
+                const file = fileInput.files[0];
+
+                // Show status
+                uploadStatus.textContent = `Uploading ${file.name}...`;
+                uploadStatus.style.display = 'block';
+                uploadBtn.style.opacity = '0.7';
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                try {
+                    const res = await fetch('/api/upload-file', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await res.json();
+
+                    if (data.success) {
+                        uploadStatus.textContent = '✅ Indexed! Search for it now.';
+                        uploadStatus.style.color = '#4ade80';
+                        setTimeout(() => { uploadStatus.style.display = 'none'; }, 3000);
+                    } else {
+                        throw new Error(data.error);
+                    }
+                } catch (err) {
+                    uploadStatus.textContent = '❌ Error: ' + err.message;
+                    uploadStatus.style.color = '#f87171';
+                } finally {
+                    uploadBtn.style.opacity = '1';
+                    fileInput.value = ''; // Reset
+                }
             }
-        }
-    });
+        });
+    }
 
-    // Enhanced Autocomplete Input Listener with AI features
-    searchInput.addEventListener('input', debounce(async (e) => {
-        const query = e.target.value.trim();
-        if (query.length < 1) {
+    // --- SEARCH LOGIC ---
+    if (searchForm) {
+        searchForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const query = searchInput.value.trim();
+            if (query) {
+                performSearch(query);
+            }
+        });
+    }
+
+    // --- AUTOCOMPLETE LOGIC ---
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.trim();
+            currentQuery = query;
+
+            // Clear suggestions if empty
+            if (query.length < 1) {
+                suggestionsBox.innerHTML = '';
+                suggestionsBox.classList.remove('active');
+                return;
+            }
+
+            // Debounce API call
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                fetchSuggestions(query);
+            }, 200);
+        });
+
+        // Hide suggestions on click outside
+        document.addEventListener('click', (e) => {
+            if (!searchInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
+                suggestionsBox.classList.remove('active');
+            }
+        });
+    }
+
+    async function fetchSuggestions(query) {
+        try {
+            // Updated endpoint to /api/autocomplete
+            const response = await fetch(`/api/autocomplete?q=${encodeURIComponent(query)}`);
+            if (!response.ok) return;
+
+            const data = await response.json();
+
+            // Handle new response format {suggestions, corrections, ...} or list
+            let suggestions = [];
+            if (Array.isArray(data)) {
+                suggestions = data;
+            } else if (data.suggestions) {
+                suggestions = data.suggestions;
+                // You could also use data.corrections or data.recommendations here
+            }
+
+            renderSuggestions(suggestions);
+        } catch (error) {
+            console.error('Error fetching suggestions:', error);
+        }
+    }
+
+    function renderSuggestions(suggestions) {
+        if (!suggestions || suggestions.length === 0) {
             suggestionsBox.classList.remove('active');
             return;
         }
 
-        try {
-            const autocompleteData = await aiAutocomplete.fetchAutocomplete(query);
-            renderAdvancedSuggestions(autocompleteData, query);
-        } catch (error) {
-            console.error('Error in autocomplete:', error);
-        }
-    }, 250));
+        const html = suggestions.map(s => {
+            // Check if suggestion is object or string
+            const text = typeof s === 'string' ? s : s.word;
+            // Highlight match
+            const re = new RegExp(`(${currentQuery})`, 'gi');
+            const highlighted = text.replace(re, '<strong>$1</strong>');
 
-    // Hide suggestions when clicking outside
-    document.addEventListener('click', (e) => {
-        if (!searchInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
-            suggestionsBox.classList.remove('active');
-        }
-    });
+            return `<div class="suggestion-item" data-value="${text}">
+                <span class="suggestion-icon">🔍</span>
+                <span class="suggestion-text">${highlighted}</span>
+            </div>`;
+        }).join('');
 
-    function renderAdvancedSuggestions(data, originalQuery) {
-        suggestionsBox.innerHTML = '';
+        suggestionsBox.innerHTML = html;
+        suggestionsBox.classList.add('active');
 
-        const { suggestions, corrections, recommendations } = data;
-
-        // Show correction if available
-        if (corrections && corrections.word) {
-            const correctionDiv = document.createElement('div');
-            correctionDiv.className = 'suggestion-category';
-            correctionDiv.innerHTML = `
-                <div class="category-label">✏️ Did you mean?</div>
-                <div class="correction-item" data-word="${corrections.word}">
-                    <span class="correction-text">${corrections.word}</span>
-                    <span class="correction-icon">💡</span>
-                </div>
-            `;
-            correctionDiv.querySelector('.correction-item').addEventListener('click', () => {
-                searchInput.value = corrections.word;
+        // Add click handlers
+        document.querySelectorAll('.suggestion-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const value = item.getAttribute('data-value');
+                searchInput.value = value;
                 suggestionsBox.classList.remove('active');
-                performSearch();
+                performSearch(value);
             });
-            suggestionsBox.appendChild(correctionDiv);
-        }
-
-        // Show suggestions
-        if (suggestions && suggestions.length > 0) {
-            const suggestionsDiv = document.createElement('div');
-            suggestionsDiv.className = 'suggestion-category';
-            suggestionsDiv.innerHTML = '<div class="category-label">🔍 Suggestions</div>';
-            
-            suggestions.slice(0, 6).forEach((word, index) => {
-                const item = document.createElement('div');
-                item.className = 'suggestion-item';
-                item.innerHTML = `
-                    <span class="suggestion-text">${word}</span>
-                    <span class="suggestion-count">+</span>
-                `;
-                item.style.animationDelay = `${index * 0.04}s`;
-                item.addEventListener('click', () => {
-                    searchInput.value = word;
-                    suggestionsBox.classList.remove('active');
-                    performSearch();
-                });
-                item.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        searchInput.value = word;
-                        suggestionsBox.classList.remove('active');
-                        performSearch();
-                    }
-                });
-                suggestionsDiv.appendChild(item);
-            });
-            suggestionsBox.appendChild(suggestionsDiv);
-        }
-
-        // Show recommendations
-        if (recommendations && recommendations.length > 0) {
-            const recommendDiv = document.createElement('div');
-            recommendDiv.className = 'suggestion-category';
-            recommendDiv.innerHTML = '<div class="category-label">⭐ Related Topics</div>';
-            
-            recommendations.slice(0, 4).forEach((word, index) => {
-                const item = document.createElement('div');
-                item.className = 'recommendation-item';
-                item.innerHTML = `
-                    <span class="tag-icon">🏷️</span>
-                    <span class="tag-text">${word}</span>
-                `;
-                item.style.animationDelay = `${(index + suggestions.length) * 0.04}s`;
-                item.addEventListener('click', () => {
-                    searchInput.value = (originalQuery.split(' ').slice(0, -1).join(' ') + ' ' + word).trim();
-                    suggestionsBox.classList.remove('active');
-                    performSearch();
-                });
-                recommendDiv.appendChild(item);
-            });
-            suggestionsBox.appendChild(recommendDiv);
-        }
-
-        // Show no results message
-        if (!corrections && (!suggestions || suggestions.length === 0) && (!recommendations || recommendations.length === 0)) {
-            const noResultsDiv = document.createElement('div');
-            noResultsDiv.className = 'suggestion-no-results';
-            noResultsDiv.innerHTML = '<span>No suggestions found</span>';
-            suggestionsBox.appendChild(noResultsDiv);
-        }
-
-        if (suggestionsBox.children.length > 0) {
-            suggestionsBox.classList.add('active');
-        }
+        });
     }
 
-    async function performSearch() {
-        const query = searchInput.value.trim();
-        if (!query) return;
+    async function performSearch(query) {
+        // UI Updates
+        resultsContainer.innerHTML = ''; // Clear previous
+        resultsContainer.appendChild(loadingIndicator);
+        loadingIndicator.style.display = 'flex';
 
-        // Show loading state
-        resultsContainer.innerHTML = `
-            <div class="placeholder-content">
-                <div class="placeholder-icon">⏳</div>
-                <div class="placeholder-text">Searching...</div>
-            </div>
-        `;
+        // Update URL without reload
+        const url = new URL(window.location);
+        url.searchParams.set('query', query);
+        window.history.pushState({}, '', url);
 
         try {
-            const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&semantic=true`);
+            const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
             const results = await response.json();
 
-            renderResults(results, query);
+            // Clear loading
+            loadingIndicator.style.display = 'none';
+
+            if (results.error) {
+                showError(results.error);
+                return;
+            }
+
+            if (results.length === 0) {
+                showNoResults(query);
+            } else {
+                renderResults(results);
+            }
+
         } catch (error) {
-            console.error('Error fetching results:', error);
-            resultsContainer.innerHTML = `
-                <div class="placeholder-content">
-                    <div class="placeholder-icon">⚠️</div>
-                    <div class="placeholder-text">Search Error</div>
-                    <p class="placeholder-hint">An error occurred while searching. Please try again.</p>
-                </div>
-            `;
+            console.error('Search error:', error);
+            loadingIndicator.style.display = 'none';
+            showError('Failed to connect to search server.');
         }
     }
 
-    function renderResults(results, query) {
-        resultsContainer.innerHTML = '';
+    function renderResults(results) {
+        resultsContainer.innerHTML = ''; // Ensure clear
 
-        if (results.length === 0) {
-            resultsContainer.innerHTML = `
-                <div class="placeholder-content">
-                    <div class="placeholder-icon">🔍</div>
-                    <div class="placeholder-text">No results found</div>
-                    <p class="placeholder-hint">Try different keywords: "${query}"</p>
-                </div>
-            `;
-            return;
-        }
+        // Add summary
+        const summary = document.createElement('div');
+        summary.className = 'results-summary';
+        summary.textContent = `Found ${results.length} result(s)`;
+        resultsContainer.appendChild(summary);
 
-        // Show result count
-        const resultCountDiv = document.createElement('div');
-        resultCountDiv.className = 'result-count-header';
-        resultCountDiv.innerHTML = `📊 Found <strong>${results.length}</strong> results for "<strong>${query}</strong>"`;
-        resultsContainer.appendChild(resultCountDiv);
+        results.forEach(result => {
+            const clone = resultTemplate.content.cloneNode(true);
+            const card = clone.querySelector('.result-item');
 
-        results.forEach((result, index) => {
-            const card = document.createElement('div');
-            card.className = 'result-card';
-            card.style.animationDelay = `${index * 0.05}s`;
+            // Title & Link
+            const link = clone.querySelector('.result-title a');
+            const displayTitle = result.title || result.filename || `Document ${result.doc_id}`;
+            link.textContent = displayTitle;
+            link.href = `/view/${result.doc_id}`;
 
-            // Truncate title if too long
-            const displayTitle = result.title.length > 150 ? result.title.substring(0, 150) + '...' : result.title;
-            
-            // Format score with color coding
+            // Score visualization
             const scoreColor = result.score > 0.8 ? '✨' : result.score > 0.5 ? '⭐' : '📄';
             const scorePercentage = (result.score * 100).toFixed(1);
 
+            // Clean up filename for display (formal shape)
+            let cleanFilename = (result.filename || '').replace(/_/g, ' ').replace('.txt', '').replace('.json', '');
+            if (cleanFilename.length > 30) cleanFilename = "Scientific Article"; // Fallback if too messy
+            if (cleanFilename.match(/\d{5,}/)) cleanFilename = "Research Document";
+
             card.innerHTML = `
-                <div class="result-title"><a href="#" title="${result.title}">${displayTitle}</a></div>
+                <div class="result-title"><a href="/view/${result.doc_id}" target="_blank" title="${displayTitle}">${displayTitle}</a></div>
                 <div class="result-meta">
-                    <span>📁 ${result.filename}</span>
+                    <span>📄 ${cleanFilename}</span>
                     <span class="result-score">${scoreColor} Relevance: ${scorePercentage}%</span>
                 </div>
                 <div class="result-abstract">
@@ -333,26 +229,107 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
 
-            card.addEventListener('click', () => {
-                alert(`Document: ${result.filename}\nID: ${result.doc_id}\nRelevance: ${scorePercentage}%`);
+            card.addEventListener('click', (e) => {
+                // If they clicked the link, let it handle it. if they clicked card, open it.
+                if (!e.target.closest('a')) {
+                    window.open(`/view/${result.doc_id}`, '_blank');
+                }
             });
 
             // Add hover ripple effect
-            card.addEventListener('mouseenter', () => {
-                card.style.transform = 'translateY(-8px)';
+            card.addEventListener('mousemove', (e) => {
+                const rect = card.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                card.style.setProperty('--x', `${x}px`);
+                card.style.setProperty('--y', `${y}px`);
             });
 
             resultsContainer.appendChild(card);
         });
     }
 
-    // Debounce Utility
-    function debounce(func, wait) {
-        let timeout;
-        return function (...args) {
-            const context = this;
-            clearTimeout(timeout);
-            timeout = setTimeout(() => func.apply(context, args), wait);
-        };
+    function showNoResults(query) {
+        resultsContainer.innerHTML = `
+            <div class="no-results">
+                <div class="placeholder-icon">😕</div>
+                <h3>No results found for "${query}"</h3>
+                <p>Try different keywords or check your spelling.</p>
+            </div>
+        `;
+    }
+
+    function showError(msg) {
+        resultsContainer.innerHTML = `
+            <div class="error-message">
+                <h3>⚠️ Error</h3>
+                <p>${msg}</p>
+            </div>
+        `;
+    }
+
+    // --- ANIMATION ---
+    function initParticleCanvas() {
+        const canvas = document.getElementById('particle-canvas');
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        let particles = [];
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.vx = (Math.random() - 0.5) * 0.5;
+                this.vy = (Math.random() - 0.5) * 0.5;
+                this.size = Math.random() * 2;
+                this.alpha = Math.random() * 0.5;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+
+                if (this.x < 0) this.x = width;
+                if (this.x > width) this.x = 0;
+                if (this.y < 0) this.y = height;
+                if (this.y > height) this.y = 0;
+            }
+
+            draw() {
+                ctx.fillStyle = `rgba(255, 255, 255, ${this.alpha})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function init() {
+            resize();
+            for (let i = 0; i < 50; i++) {
+                particles.push(new Particle());
+            }
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, width, height);
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+            requestAnimationFrame(animate);
+        }
+
+        window.addEventListener('resize', resize);
+        init();
+        animate();
     }
 });

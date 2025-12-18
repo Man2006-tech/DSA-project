@@ -10,6 +10,11 @@ VeridiaCore/inverted_index.txt
 VeridiaCore/glove.txt
 VeridiaCore/forward_index.txt
 VeridiaCore/lexicon.txt
+VeridiaCore/lexicon.db
+VeridiaCore/barrel_*.bin
+VeridiaCore/word_offsets_*.bin
+VeridiaCore/glove.npy
+VeridiaCore/lexicon_cache.pkl
 VeridiaCore/Unconfirmed*.crdownload
 
 # --- Large File Types ---
