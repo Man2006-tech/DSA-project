@@ -1,8 +1,3 @@
-<<<<<<< HEAD
-DATA/ 
-*.bin 
-*.json 
-=======
 # --- Heavy Data Folders ---
 DATA/
 Tested data/
@@ -15,6 +10,7 @@ VeridiaCore/inverted_index.txt
 VeridiaCore/glove.txt
 VeridiaCore/forward_index.txt
 VeridiaCore/lexicon.txt
+VeridiaCore/Unconfirmed*.crdownload
 
 # --- Large File Types ---
 *.bin
@@ -24,11 +20,14 @@ VeridiaCore/lexicon.txt
 *.csv
 *.xml
 *.zip
+*.zip
+*.rar
+*.tar
 *.pkl
 *.db
 *.sqlite3
+*.crdownload
 
 # --- OS generated files ---
 .DS_Store
 Thumbs.db
->>>>>>> 6a67cbe9e04095b458c071dffa8d3fdba0f06193

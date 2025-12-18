@@ -22,8 +22,8 @@ static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'stat
 app = Flask(__name__, template_folder=template_dir, static_folder=static_dir)
 
 # Initialize Search Engine
-# Data is in VeridiaCore (../VeridiaCore)
-DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'VeridiaCore')
+# Data is in Veridia_Core/VeridiaCore (where barrels are)
+DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'VeridiaCore'))
 search_engine = SearchEngine(DATA_DIR)
 
 # Initialize Incremental Indexer
@@ -87,27 +87,112 @@ def index():
 
 @app.route('/api/search')
 def search():
-    query = request.args.get('q', '')
+    # --- NEW ROBUST SEARCH LOGIC ---
+    # Replaces old strict-only logic as requested
+    
+    query = request.args.get('q',('').strip())
     semantic_param = request.args.get('semantic', 'true')
     use_semantic = semantic_param.lower() == 'true'
 
     if not query:
         return jsonify([])
-    
-    # Updated to pass semantic flag
-    results = search_engine.search(query, use_semantic=use_semantic)
-    
-    # Enrich results with content
-    enriched_results = []
-    for res in results:
-        doc_id = res['doc_id']
-        content_data = search_engine.get_document_content(doc_id)
-        if content_data:
-            res['abstract'] = content_data.get('abstract', 'No Abstract')
-        
-        enriched_results.append(res)
 
-    return jsonify(enriched_results)
+    print(f"\n[Search API] Processing query: '{query}'")
+    
+    # helper for enriching results
+    def enrich(results):
+        enriched = []
+        seen_ids = set()
+        for res in results:
+            doc_id = res['doc_id']
+            if doc_id in seen_ids: continue
+            seen_ids.add(doc_id)
+            
+            content_data = search_engine.get_document_content(doc_id)
+            if content_data:
+                res['abstract'] = content_data.get('abstract', 'No Abstract')
+                res['filename'] = content_data.get('filename', 'Unknown')
+            enriched.append(res)
+        return enriched
+
+    # Stage 1: Standard Search (Strict AND)
+    # This is best for exact matches
+    results = search_engine.search(query, use_semantic=use_semantic)
+    print(f"  Stage 1 (Strict): Found {len(results)} results")
+
+    # Stage 2: AI Auto-Correction
+    # If Stage 1 failed/low results, try fixing typos
+    if len(results) < 5 and ai_corrector:
+        corrected_query = query
+        words = query.split()
+        new_words = []
+        changed = False
+        
+        for word in words:
+            if len(word) > 2:
+                # Get correction
+                corr = ai_corrector.correct_word(word, max_suggestions=1)
+                best = corr['suggestions'][0][0] if corr['suggestions'] else word
+                new_words.append(best)
+                if best.lower() != word.lower():
+                    changed = True
+            else:
+                new_words.append(word)
+        
+        if changed:
+            corrected_query = " ".join(new_words)
+            print(f"  Stage 2 (Correction): Retrying with '{corrected_query}'")
+            corrected_results = search_engine.search(corrected_query, use_semantic=use_semantic)
+            print(f"    Found {len(corrected_results)} results")
+            
+            # Merge results (preferring strictly matched ones)
+            # Simple merge: existing results + new corrected ones
+            current_ids = {r['doc_id'] for r in results}
+            for res in corrected_results:
+                if res['doc_id'] not in current_ids:
+                    results.append(res)
+
+    # Stage 3: Fallback "OR" Search (The Safety Net)
+    # If we still have very few results and multiple words, search for ANY word
+    if len(results) < 3 and len(query.split()) > 1:
+        print(f"  Stage 3 (Fallback OR): searching words individually")
+        
+        # Use a dictionary to accumulate scores
+        or_scores = {}
+        # Pre-populate with existing results
+        for res in results:
+            or_scores[res['doc_id']] = res
+        
+        words = query.split()
+        for word in words:
+            if len(word) < 3: continue # Skip small stop words like 'is', 'of'
+            
+            # Search each word individually (no semantic for speed/relevance focus)
+            word_res = search_engine.search(word, use_semantic=False)
+            for res in word_res:
+                did = res['doc_id']
+                if did not in or_scores:
+                    or_scores[did] = res
+                    # Penalty for partial match compared to full match? 
+                    # Actually engine.search already scores. 
+                    # We might want to lower score since it's just one word match.
+                    or_scores[did]['score'] *= 0.5 
+                else:
+                    # Boost score if multiple words match
+                    or_scores[did]['score'] += res['score'] * 0.5 
+
+        # Convert back to list and sort
+        results = list(or_scores.values())
+        results.sort(key=lambda x: x['score'], reverse=True)
+        print(f"    After OR-Merge: {len(results)} total results")
+
+    # Limit results
+    results = results[:50]
+    
+    # Final Enrichment
+    final_output = enrich(results)
+    
+    return jsonify(final_output)
 
 @app.route('/api/suggest')
 def suggest():
@@ -129,33 +214,49 @@ def autocomplete():
             'recommendations': []
         })
     
-    # Get word suggestions
-    words = query.split()
-    last_word = words[-1].lower() if words else ''
-    
-    # Get suggestions for the last word
-    suggestions = search_engine.get_suggestions(last_word)[:8]
-    
-    # Check if we need corrections for any word
-    corrections = {}
-    recommendations = []
-    
-    if len(last_word) > 2:
-        # Find corrections for the last word
-        corrected = find_corrections(last_word)
-        if corrected:
-            corrections = corrected[0] if corrected else {}
+    # Use new AI engine if available
+    if ai_suggestions:
+        # Get smart suggestions replacing old prefix logic
+        completions = ai_suggestions.get_query_completions(query, max_suggestions=8)
+        suggestions = [s['word'] for s in completions]
         
-        # Get related recommendations
-        if suggestions:
-            recommendations = suggestions[:5]
+        # Get recommendations (trending or related)
+        recommendations = []
+        if len(suggestions) < 3:
+             trending = ai_suggestions.get_trending_suggestions(max_suggestions=3)
+             recommendations = [t['word'] for t in trending]
+    else:
+        # Fallback to old logic
+        words = query.split()
+        last_word = words[-1].lower() if words else ''
+        suggestions = search_engine.get_suggestions(last_word)[:8]
+        recommendations = []
+
+    # Use AI corrector for corrections
+    corrections = {}
+    if ai_corrector:
+        words = query.split()
+        if words:
+            last_word = words[-1]
+            if len(last_word) > 2:
+                corr_res = ai_corrector.correct_word(last_word, max_suggestions=1)
+                # Format to match expected frontend structure if possible, or simplified
+                # Old frontend expects: corrections = {'word': 'suggestion', 'distance': 1}
+                # But typically it expects a list or single object. 
+                # script.js line 178 checks: if (corrections && corrections.word)
+                if not corr_res['is_correct'] and corr_res['suggestions']:
+                    corrections = {
+                        'word': corr_res['suggestions'][0][0],
+                        'distance': 0 # Dummy
+                    }
     
     return jsonify({
         'suggestions': suggestions,
         'corrections': corrections,
         'recommendations': recommendations,
-        'input_length': len(last_word)
+        'input_length': len(query)
     })
+
 
 @app.route('/api/debug')
 def debug():
@@ -298,222 +399,165 @@ def autocorrect():
     try:
         if not ai_corrector:
             return jsonify({'error': 'AI corrector not initialized'}), 500
-        
+            
         query = request.args.get('q', '').strip()
-        max_suggestions = int(request.args.get('limit', 5))
+        limit = int(request.args.get('limit', 5))
         
-        if not query or len(query) < 1:
-            return jsonify({
-                'query': query,
-                'corrections': [],
-                'confidence': 0
-            })
-        
-        # Get corrections for the last word
+        if not query:
+            return jsonify({'corrections': []})
+            
+        # Split into words and correct each
         words = query.split()
-        last_word = words[-1] if words else ''
+        all_corrections = []
         
-        if len(last_word) < 2:
-            return jsonify({
-                'query': query,
-                'corrections': [],
-                'confidence': 0
-            })
-        
-        # Perform correction
-        correction = ai_corrector.correct_word(last_word, max_suggestions=max_suggestions)
-        
-        # Build complete suggestions (replace last word in query)
-        full_suggestions = []
-        for sugg_word, score in correction['suggestions']:
-            corrected_query = ' '.join(words[:-1] + [sugg_word])
-            full_suggestions.append({
-                'query': corrected_query,
-                'corrected_word': sugg_word,
-                'original_word': last_word,
-                'score': float(score),
-                'correction_type': correction['correction_type']
-            })
-        
+        for word in words:
+            # Skip short words or numbers
+            if len(word) < 3 or word.isdigit():
+                continue
+                
+            # helper to get one best suggestion
+            res = ai_corrector.correct_word(word, max_suggestions=limit)
+            suggestions = res.get('suggestions', [])
+            
+            if suggestions and suggestions[0][0] != word.lower():
+                all_corrections.append({
+                    'original': word,
+                    'corrections': [{'corrected_word': w, 'score': s} for w, s in suggestions]
+                })
+                
         return jsonify({
             'query': query,
-            'is_correct': correction['is_correct'],
-            'corrections': full_suggestions,
-            'correction_method': correction['correction_type'],
-            'count': len(full_suggestions)
+            'corrections': all_corrections
         })
-    
     except Exception as e:
+        print(f"Error in autocorrect: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/smart-suggest', methods=['GET'])
 def smart_suggest():
     """
-    Advanced AI-powered suggestion engine
-    Combines:
-    - Prefix matching
-    - Semantic relevance
-    - Frequency analysis
-    - Query intent detection
+    Intelligent suggestions based on context, frequency, and semantics.
     """
     try:
         if not ai_suggestions:
-            return jsonify({'error': 'Suggestion engine not initialized'}), 500
-        
+            # Fallback to simple suggestions
+            return suggest()
+            
         query = request.args.get('q', '').strip()
-        max_suggestions = int(request.args.get('limit', 8))
+        limit = int(request.args.get('limit', 8))
         
         if not query:
-            return jsonify({
-                'query': query,
-                'suggestions': [],
-                'trending': [],
-                'insight': 'Enter a search term'
-            })
+            return jsonify({'suggestions': [], 'trending': []})
+            
+        # 1. Prefix matches (primary)
+        suggestions = ai_suggestions.get_query_completions(query, max_suggestions=limit)
         
-        # Get query completions
-        completions = ai_suggestions.get_query_completions(query, max_suggestions)
-        
-        # Get trending terms (if short query)
-        trending = []
-        if len(query.split()) == 1 and len(query) < 3:
-            trending = ai_suggestions.get_trending_suggestions(max_suggestions=5)
-        
-        # Format suggestions
-        formatted_suggestions = [
-            {
-                'word': sugg['word'],
-                'score': sugg['score'],
-                'frequency': sugg['frequency'],
-                'type': sugg['type']
-            }
-            for sugg in completions
-        ]
+        # 2. Trending (secondary)
+        trending = ai_suggestions.get_trending_suggestions(max_suggestions=5)
         
         return jsonify({
-            'query': query,
-            'suggestions': formatted_suggestions,
-            'trending': [{'word': t['word'], 'frequency': t['frequency']} for t in trending],
-            'count': len(formatted_suggestions)
+            'suggestions': suggestions,
+            'trending': trending
         })
-    
+        
     except Exception as e:
+        print(f"Error in smart-suggest: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/query-analysis', methods=['GET'])
 def query_analysis():
     """
-    Analyze search query for intent and structure
-    Provides insights on what the user is looking for
+    Analyze query intent and complexity.
     """
     try:
         if not semantic_analyzer:
-            return jsonify({'error': 'Query analyzer not initialized'}), 500
-        
+            return jsonify({'error': 'Semantic analyzer not initialized'}), 500
+            
         query = request.args.get('q', '').strip()
-        
         if not query:
-            return jsonify({'error': 'No query provided'}), 400
-        
-        # Analyze the query
+            return jsonify({'analysis': {}})
+            
         analysis = semantic_analyzer.analyze_query(query)
-        
-        # Get related suggestions based on query intent
-        if analysis['intent'] == 'search':
-            related = ai_suggestions.get_related_suggestions(analysis['tokens'], max_suggestions=5) if ai_suggestions else []
-        else:
-            related = []
         
         return jsonify({
             'query': query,
-            'analysis': {
-                'intent': analysis['intent'],
-                'complexity': analysis['complexity'],
-                'token_count': len(analysis['tokens']),
-                'tokens': analysis['tokens']
-            },
-            'related_suggestions': [s['word'] for s in related],
-            'interpretation': f"You're {analysis['intent']}ing for: {', '.join(analysis['tokens'])}"
+            'analysis': analysis,
+            'interpretation': f"You're comparing for: {', '.join(analysis['tokens'])}" # Simple interpretation
         })
-    
+        
     except Exception as e:
+        print(f"Error in query-analysis: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/enhanced-search', methods=['GET'])
 def enhanced_search():
     """
-    Advanced search with automatic correction and better results
-    Combines spell correction, semantic analysis, and intelligent ranking
+    Smart search that applies auto-correction and semantic expansion automatically.
     """
     try:
         query = request.args.get('q', '').strip()
         use_semantic = request.args.get('semantic', 'true').lower() == 'true'
-        use_correction = request.args.get('correct', 'true').lower() == 'true'
+        use_correct = request.args.get('correct', 'true').lower() == 'true'
         
         if not query:
-            return jsonify([])
-        
-        # Step 1: Analyze query
-        if semantic_analyzer:
-            analysis = semantic_analyzer.analyze_query(query)
-        else:
-            analysis = {'tokens': query.split(), 'intent': 'search'}
-        
-        # Step 2: Attempt correction if enabled
-        corrected_query = query
+            return jsonify({'results': [], 'correction': None})
+            
+        final_query = query
         correction_info = None
         
-        if use_correction and ai_corrector:
+        # 1. Apply Auto-correction if requested
+        if use_correct and ai_corrector:
+            # Simple full query correction logic
             words = query.split()
             corrected_words = []
-            corrections_made = []
+            has_correction = False
+            first_corr_list = []
             
             for word in words:
-                correction = ai_corrector.correct_word(word, max_suggestions=1)
-                if not correction['is_correct'] and correction['suggestions']:
-                    corrected_words.append(correction['suggestions'][0][0])
-                    corrections_made.append({
-                        'from': word,
-                        'to': correction['suggestions'][0][0],
-                        'method': correction['correction_type']
-                    })
+                if len(word) < 3:
+                     corrected_words.append(word)
+                     continue
+                res = ai_corrector.correct_word(word, max_suggestions=1)
+                suggs = res.get('suggestions', [])
+                if suggs:
+                     best_word = suggs[0][0]
+                     corrected_words.append(best_word)
+                     if best_word != word.lower():
+                         has_correction = True
+                         first_corr_list.append({'from': word, 'to': best_word, 'method': res.get('correction_type')})
                 else:
-                    corrected_words.append(word)
+                     corrected_words.append(word)
             
-            if corrections_made:
-                corrected_query = ' '.join(corrected_words)
+            if has_correction:
+                final_query = " ".join(corrected_words)
                 correction_info = {
                     'original': query,
-                    'corrected': corrected_query,
-                    'corrections': corrections_made
+                    'corrections': first_corr_list
                 }
         
-        # Step 3: Perform search with corrected query
-        results = search_engine.search(corrected_query, use_semantic=use_semantic)
+        # 2. Perform Search (using semantic engine)
+        results = search_engine.search(final_query, use_semantic=use_semantic)
         
-        # Step 4: Enrich results
+        # 3. Enrich Results
         enriched_results = []
         for res in results:
             doc_id = res['doc_id']
             content_data = search_engine.get_document_content(doc_id)
             if content_data:
                 res['abstract'] = content_data.get('abstract', 'No Abstract')
+                res['filename'] = content_data.get('filename', 'Unknown')
             enriched_results.append(res)
-        
+            
         return jsonify({
             'query': query,
-            'corrected_query': corrected_query if correction_info else None,
+            'corrected_query': final_query,
             'correction': correction_info,
-            'analysis': {
-                'intent': analysis['intent'],
-                'complexity': analysis['complexity']
-            },
-            'results': enriched_results,
-            'count': len(enriched_results)
+            'results': enriched_results
         })
-    
+        
     except Exception as e:
+        print(f"Error in enhanced-search: {e}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000, use_reloader=False)
+    app.run(debug=True, port=5000)

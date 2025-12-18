@@ -38,7 +38,7 @@
             <!-- Search Section -->
             <section class="search-section">
                 <div class="search-container">
-                    <form id="search-form" action="/search" method="get">
+                    <form id="search-form" onsubmit="event.preventDefault();">
                         <div class="search-input-group">
                             <div class="search-bar-wrapper">
                                 <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
@@ -48,7 +48,7 @@
                                 </svg>
                                 <input type="text" name="query" id="search-input" placeholder="Search articles, topics, or keywords..."
                                     autocomplete="off" required spellcheck="false">
-                                <button id="search-btn" type="submit" class="search-button">
+                                <button id="search-btn" type="button" class="search-button">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
                                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                         <line x1="5" y1="12" x2="19" y2="12"></line>

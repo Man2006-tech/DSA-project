@@ -12,11 +12,21 @@ from text_processor import clean_and_tokenize
 from config import OUTPUT_DIR, BATCH_SIZE, PROGRESS_INTERVAL
 
 
+from build_barrels import build_barrels
+
 class IncrementalIndexer:
-    """
-    Manages incremental indexing - adds new documents to existing indices
-    without reprocessing previously indexed documents.
-    """
+    # ... (existing code)
+
+    def add_documents(self, documents):
+        # ... (existing code)
+        
+        print(f"\n[3/3] Rebuilding inverted index...")
+        self._rebuild_inverted_index()
+        
+        print(f"\n[4/4] Updating Barrels...")
+        build_barrels()
+        
+        # Save state
     
     def __init__(self, data_dir):
         self.data_dir = data_dir
