@@ -1,3 +1,5 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:9ab00964329fdc75f54bd2938a57aa8a8477dd827bccc632cfba980216cd0995
-size 45917602
+1|doc1.txt|Search Engines 101
+2|doc2.txt|Python for Data Science
+3|doc3.txt|VeridiaCore Architecture
+4|doc4.txt|Algorithms and Data Structures
+5|doc5.txt|Artificial Intelligence in Search

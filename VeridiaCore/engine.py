@@ -4,8 +4,8 @@ import re
 import struct
 import mmap
 import time
-from .trie import Trie
-from .vector_model import VectorModel
+from trie import Trie
+from vector_model import VectorModel
 
 class SearchEngine:
     def __init__(self, data_dir):
@@ -22,7 +22,7 @@ class SearchEngine:
         
         # New Components
         self.trie = Trie()
-        self.vector_model = VectorModel(os.path.join(self.data_dir, "glove.txt"))
+        self.vector_model = VectorModel(os.path.join(self.data_dir, "glove.vec"))
         
         self.offsets_file = os.path.join(self.data_dir, "word_offsets_barrels.bin")
         
@@ -185,7 +185,7 @@ class SearchEngine:
             
         offset_pos = (doc_id - 1) * 8
         doc_offset_file = os.path.join(self.data_dir, "doc_offsets.bin")
-        jsonl_file = os.path.join(self.data_dir, "dataset.jsonl")
+        jsonl_file = os.path.join(self.data_dir, "dataset.data")
         
         if not os.path.exists(doc_offset_file) or not os.path.exists(jsonl_file):
             return None

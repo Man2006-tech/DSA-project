@@ -62,7 +62,7 @@ def main():
     # if the user just runs it quick. But for a full test, valid commands needed.
     # Let's uncomment it but keep the warning.
     
-    # run_script(BUILD_INDEX_SCRIPT, "Lexicon & Forward Index Construction") 
+    run_script(BUILD_INDEX_SCRIPT, "Lexicon & Forward Index Construction") 
     
     print("\nBenchmark Complete.")
     print("Note: To benchmark 'build_index.py' (Forward Index), uncomment it in the script.")

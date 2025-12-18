@@ -4,7 +4,7 @@ import time
 
 # CONFIGURATION
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-JSONL_FILE = os.path.join(BASE_DIR, "dataset.jsonl")
+JSONL_FILE = os.path.join(BASE_DIR, "dataset.data")
 OUTPUT_FILE = os.path.join(BASE_DIR, "doc_offsets.bin")
 
 def build_doc_offsets():
