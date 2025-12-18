@@ -1,0 +1,6 @@
+@echo off
+echo Starting Veridia Search Engine...
+echo Opening Browser...
+start "" "http://localhost:5000"
+python Backend/app.py
+pause

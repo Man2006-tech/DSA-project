@@ -8,14 +8,16 @@ import os
 # Base directory of the project
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Data directory containing JSON file
-DATA_DIR = os.path.join(BASE_DIR, "DATA")
+# Data directory containing raw text/JSON files
+# Point to the DATA directory (Directly in Search-Engine root)
+DATA_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "DATA"))
 
-# JSON dataset path - UPDATE THIS PATH
-JSON_DATASET_PATH = r"C:\Users\Ehsan Ullah\Downloads\archive (4)\arxiv-metadata-oai-snapshot.json"
+# JSON dataset path
+JSON_DATASET_PATH = os.path.join(os.path.dirname(DATA_DIR), "VeridiaCore", "dataset.jsonl")
 
-# Output directory for indices
-OUTPUT_DIR = os.path.join(BASE_DIR, "VeridiaCore")
+# Output directory for indices (Where barrels and lexicon are)
+# Point to VeridiaCore (Directly in Search-Engine root)
+OUTPUT_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "VeridiaCore"))
 
 # Index file paths
 LEXICON_PATH = os.path.join(OUTPUT_DIR, "lexicon.txt")
@@ -25,13 +27,13 @@ METADATA_PATH = os.path.join(OUTPUT_DIR, "document_metadata.txt")
 
 # ============= INDEXING CONFIGURATION =============
 # Maximum number of documents to index
-MAX_DOCUMENTS = 45000
+MAX_DOCUMENTS = 300000
 
 # Batch size for processing (larger = faster but more memory)
-BATCH_SIZE = 5000
+BATCH_SIZE = 50000
 
 # Progress reporting interval
-PROGRESS_INTERVAL = 1000
+PROGRESS_INTERVAL = 10000
 
 # ============= LANGUAGE FILTERING =============
 STOP_WORDS = {

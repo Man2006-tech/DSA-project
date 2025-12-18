@@ -8,67 +8,53 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 </head>
 
 <body>
-    <div class="background-blobs">
-        <div class="blob blob-1"></div>
-        <div class="blob blob-2"></div>
-        <div class="blob blob-3"></div>
+    <!-- Animated Background -->
+    <div class="background-container">
+        <div class="gradient-bg"></div>
+        <div class="animated-blob blob-1"></div>
+        <div class="animated-blob blob-2"></div>
+        <div class="animated-blob blob-3"></div>
+        <div class="animated-blob blob-4"></div>
+        <canvas id="particle-canvas"></canvas>
     </div>
 
     <div class="container">
         <header>
-            <div class="header-content">
-                <h1 class="logo">Veridia</h1>
-                <p class="tagline">Discover the World of Knowledge And Innovation</p>
-                <p class="subtitle">Fast • Intelligent • Comprehensive Search</p>
-            </div>
+            <h1 class="logo">Veridia</h1>
+            <p class="tagline">Discover the World of Knowledge</p>
         </header>
 
         <div class="search-container">
             <form id="search-form" action="/search" method="get">
                 <div class="search-bar-wrapper">
-                    <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="11" cy="11" r="8"></circle>
-                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                    </svg>
                     <input type="text" name="query" id="search-input" placeholder="Search for articles, topics, or keywords..."
                         autocomplete="off" required>
-                    <button id="search-btn" type="submit" title="Search">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                    <button id="search-btn" type="submit">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="12 5 19 12 12 19"></polyline>
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                         </svg>
                     </button>
                 </div>
             </form>
             <div id="suggestions-box" class="suggestions-box"></div>
-            <div class="search-hints">
-                <span class="hint">💡 Tip: Use quotes for exact match</span>
-            </div>
         </div>
 
         <div id="results-container" class="results-container">
-            <div class="placeholder-content">
-                <div class="placeholder-icon">🔍</div>
-                <div class="placeholder-text">
-                    <h2>Ready to explore?</h2>
-                    <p>Start typing or click the search icon to begin your journey</p>
-                </div>
+            <div class="placeholder-text">
+                Start typing or click the search icon.
             </div>
             
             <div id="loading-indicator" class="loading-indicator" style="display: none;">
                 <div class="spinner"></div>
-                <p>Searching now...</p>
+                <p>Searching...</p>
             </div>
-        </div>
-
-        <footer class="main-footer">
-            <p>© 2025 Veridia • Advanced Knowledge Search Engine</p>
-        </footer>
+            </div>
     </div>
 
     <template id="result-template">
@@ -78,6 +64,7 @@
             <p class="result-snippet"></p>
         </div>
     </template>
+
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 

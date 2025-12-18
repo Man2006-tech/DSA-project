@@ -39,16 +39,14 @@ def stream_json_documents(limit=MAX_DOCUMENTS):
                     # Combine title and abstract for content
                     full_text = f"{title} {abstract}"
                     
-                    # Filter non-English documents
-                    if not is_english_text(full_text):
-                        continue
+                    # Filter non-English documents - DISABLED to ensure all files are indexed
+                    # if not is_english_text(full_text):
+                    #    continue
                     
                     doc_count += 1
                     
-                    # Create clean title preview
-                    title_preview = extract_title_preview(title, 150)
-                    
-                    yield (doc_count, title_preview, full_text, authors)
+                    # Return raw title (faster)
+                    yield (doc_count, title, full_text, authors)
                     
                     if doc_count % 5000 == 0:
                         print(f"  ✓ Collected {doc_count} English docs (scanned {processed})")

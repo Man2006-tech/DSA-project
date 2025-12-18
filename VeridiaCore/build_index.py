@@ -9,7 +9,7 @@ import struct
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # DATA_DIR = os.path.join(BASE_DIR, 'DATA') # No longer used for direct scanning
 OUTPUT_DIR = os.path.dirname(os.path.abspath(__file__))
-JSONL_FILE = os.path.join(OUTPUT_DIR, "dataset.jsonl")
+JSONL_FILE = os.path.join(OUTPUT_DIR, "dataset.data")
 
 def clean_text(text):
     # Simple tokenization: lowercase and keep only letters
