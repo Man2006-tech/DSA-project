@@ -1,0 +1,28 @@
+# --- Heavy Data Folders ---
+DATA/
+Tested data/
+VeridiaCore/__pycache__/
+__pycache__/
+
+# --- Large Specific Files (Explicitly Ignore these) ---
+VeridiaCore/dataset.jsonl
+VeridiaCore/inverted_index.txt
+VeridiaCore/glove.txt
+VeridiaCore/forward_index.txt
+VeridiaCore/lexicon.txt
+
+# --- Large File Types ---
+*.bin
+*.json
+*.txt
+*.jsonl
+*.csv
+*.xml
+*.zip
+*.pkl
+*.db
+*.sqlite3
+
+# --- OS generated files ---
+.DS_Store
+Thumbs.db

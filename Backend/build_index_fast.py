@@ -55,16 +55,12 @@ def build_indices_optimized():
                 continue
             
             # Build lexicon and get word IDs
-            # Optimized: minimized lookups and string conversions
             word_ids = []
             for word in words:
-                # Use get() for speed if mostly hits, but here we build lexicon
-                wid = lexicon.get(word)
-                if wid is None:
-                    wid = word_id_counter
-                    lexicon[word] = wid
+                if word not in lexicon:
+                    lexicon[word] = word_id_counter
                     word_id_counter += 1
-                word_ids.append(str(wid))
+                word_ids.append(str(lexicon[word]))
             
             # Add to buffers
             forward_buffer.append(f"{doc_id}\t{' '.join(word_ids)}\n")

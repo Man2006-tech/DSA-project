@@ -4,10 +4,9 @@ import time
 from collections import defaultdict
 
 # Configuration
-from config import OUTPUT_DIR
-
-# Configuration
-VERIDIA_CORE_DIR = OUTPUT_DIR
+# Path assumptions based on project structure
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+VERIDIA_CORE_DIR = os.path.join(BASE_DIR, '..', 'VeridiaCore')
 INPUT_INVERTED_TXT = os.path.join(VERIDIA_CORE_DIR, 'inverted_index.txt')
 OUTPUT_OFFSETS_BIN = os.path.join(VERIDIA_CORE_DIR, 'word_offsets_barrels.bin')
 OUTPUT_BARRELS_INFO = os.path.join(VERIDIA_CORE_DIR, 'barrels_info.txt')
@@ -95,25 +94,6 @@ def build_barrels():
              size = os.path.getsize(os.path.join(VERIDIA_CORE_DIR, f"barrel_{i}.bin"))
              f_info.write(f" - barrel_{i}.bin: {size} bytes\n")
         f_info.write(f" - word_offsets_barrels.bin: {os.path.getsize(OUTPUT_OFFSETS_BIN)} bytes\n")
-
-    print(f"\n[4/4] Generating Zero-Latency Dense Index...")
-    
-    # Logic for dense index generation
-    NEW_OFFSETS = os.path.join(VERIDIA_CORE_DIR, 'word_offsets_dense.bin')
-    
-    if word_offsets:
-        max_id = max(word_offsets.keys())
-        # Each slot: BarrelID(4) + Off(8) + Cnt(4) = 16 bytes
-        array_size = (max_id + 1) * 16
-        buffer = bytearray(array_size)
-        
-        for wid, (bid, off, cnt) in word_offsets.items():
-            if wid <= max_id:
-                struct.pack_into('<IQI', buffer, wid * 16, bid, off, cnt)
-                
-        with open(NEW_OFFSETS, 'wb') as f:
-            f.write(buffer)
-        print(f"  ✓ Created {NEW_OFFSETS} ({array_size/1024/1024:.1f} MB)")
 
     elapsed = time.time() - start_time
     print(f"Done in {elapsed:.2f} seconds.")
