@@ -15,8 +15,17 @@ static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'stat
 app = Flask(__name__, template_folder=template_dir, static_folder=static_dir)
 
 # Initialize Search Engine for Veridia
-# Hardcoded path to ensure correct data loading
-DATA_DIR = r"d:\Third Semester\DSA\Project\Search-Engine\VeridiaCore"
+# Use env var or relative path for cloud deployment
+base_dir = os.path.dirname(os.path.abspath(__file__))
+# Default to looking for VeridiaCore in the parent directory
+default_data_dir = os.path.join(base_dir, '..', 'VeridiaCore')
+
+# Check for environment override (e.g., for Demo Data)
+DATA_DIR = os.environ.get("DATA_DIR", default_data_dir)
+
+# Ensure absolute path
+DATA_DIR = os.path.abspath(DATA_DIR)
+
 print(f"\n[App] Initializing Search Engine from: {DATA_DIR}")
 
 search_engine = None
@@ -290,6 +299,7 @@ def api_check_ready():
 if __name__ == '__main__':
     print("\n" + "="*50)
     print("  VERIDIA SEARCH ENGINE v2.0")
-    print("  Server running on http://localhost:5001")
+    port = int(os.environ.get("PORT", 5001))
+    print(f"  Server running on http://0.0.0.0:{port}")
     print("="*50 + "\n")
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    app.run(host='0.0.0.0', port=port, debug=True)

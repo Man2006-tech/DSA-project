@@ -38,4 +38,8 @@ server_log.txt
 
 # --- OS generated files ---
 .DS_Store
-Thumbs.db
+
+# --- Railway Demo Data (Allow these) ---
+!VeridiaCore_Demo/
+!VeridiaCore_Demo/**
+!requirements.txt
