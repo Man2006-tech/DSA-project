@@ -26,6 +26,15 @@ DATA_DIR = os.environ.get("DATA_DIR", default_data_dir)
 # Ensure absolute path
 DATA_DIR = os.path.abspath(DATA_DIR)
 
+# --- AUTO-FALLBACK FOR DEMO ---
+# If default dir doesn't exist, check for Demo folder (Railway friendly)
+if not os.path.exists(DATA_DIR):
+    demo_dir = os.path.join(base_dir, '..', 'VeridiaCore_Demo')
+    if os.path.exists(demo_dir):
+        print(f"[App] Default data dir not found. Switching to DEMO DIR: {demo_dir}")
+        DATA_DIR = os.path.abspath(demo_dir)
+# ------------------------------
+
 print(f"\n[App] Initializing Search Engine from: {DATA_DIR}")
 
 search_engine = None
